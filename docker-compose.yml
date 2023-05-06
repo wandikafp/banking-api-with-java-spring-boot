@@ -1,0 +1,82 @@
+version: "3.8"
+services:
+  api_service:
+    build: .
+    restart: on-failure
+    container_name: "spring-boot-demo"
+    env_file: ./.env
+    ports:
+      - $SPRING_LOCAL_PORT:$SPRING_DOCKER_PORT
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_db:$MYSQLDB_DOCKER_PORT/$MYSQLDB_DATABASE?useSSL=false
+      SPRING_DATASOURCE_USERNAME: $MYSQLDB_USER
+      SPRING_DATASOURCE_PASSWORD: $MYSQLDB_ROOT_PASSWORD
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL5InnoDBDialect
+      SPRING_JPA_HIBERNATE_DDL-AUTO: update
+      SPRING_REDIS_HOST: $REDIS_DOCKER_HOST
+      SPRING_REDIS_PORT: $REDIS_DOCKER_PORT
+      SPRING_DATA_MONGODB_URI: mongodb://mongo_db:$MONGO_DOCKER_PORT/demo_db
+      KAFKA_BOOTSTRAP_ADDRESS: kafka-server:9092
+    depends_on:
+      - mysql_db
+    networks:
+      - spring-demo
+  mysql_db:
+    image: mysql:5.7
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      - MYSQL_ROOT_PASSWORD=$MYSQLDB_ROOT_PASSWORD
+      - MYSQL_DATABASE=$MYSQLDB_DATABASE
+    ports:
+      - $MYSQLDB_LOCAL_PORT:$MYSQLDB_DOCKER_PORT
+    volumes:
+      - db:/var/lib/mysql
+    networks:
+      - spring-demo
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    env_file: ./.env
+    ports:
+      - $REDIS_LOCAL_PORT:$REDIS_DOCKER_PORT
+    networks:
+      - spring-demo
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    env_file: ./.env
+    environment:
+      ZOOKEEPER_CLIENT_PORT: $ZOO_LOCAL_PORT
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - $ZOO_LOCAL_PORT:$ZOO_DOCKER_PORT
+    networks:
+      - spring-demo
+  kafka-server:
+    image: confluentinc/cp-kafka:latest
+    env_file: ./.env
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: $KAFKA_ZOO_CONNECT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-server:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - spring-demo
+  mongo_db:
+    image: mongo:latest
+    env_file: ./.env
+    restart: unless-stopped
+    ports:
+      - $MONGO_LOCAL_PORT:$MONGO_DOCKER_PORT
+    networks:
+      - spring-demo
+volumes:
+  db:
+networks:
+  spring-demo:
